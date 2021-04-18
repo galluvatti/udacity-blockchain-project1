@@ -71,10 +71,16 @@ class Blockchain {
                 block.previousBlockHash = self.chain[self.chain.length - 1].hash;
             }
             block.hash = SHA256(JSON.stringify(block)).toString();
+            const chainValidationErrors = await self.validateChain();
+            if (chainValidationErrors.length == 0) {
+                self.chain.push(block);
+                self.height = self.height + 1;
+                resolve(block);
+            }
+            else {
+                reject("Chain is broken");
+            }
 
-            self.chain.push(block);
-            self.height = self.height + 1;
-            resolve(block);
         });
     }
 
@@ -114,21 +120,21 @@ class Blockchain {
         return new Promise(async (resolve, reject) => {
             const messageTime = parseInt(message.split(':')[1]);
             const currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
-            console.log(currentTime - messageTime);
+            
             if (currentTime - messageTime <= FIVE_MINUTES) {
                 let messageIsValid = false;
                 try {
                     messageIsValid = bitcoinMessage.verify(message, address, signature);
                     if (messageIsValid) {
-                        resolve(self._addBlock(new BlockClass.Block({ owner: address, star })));
+                        const block = await self._addBlock(new BlockClass.Block({ owner: address, star }));
+                        resolve(block);
                     }
                     else {
                         reject("Message not valid - verification failed.");
                     }
                 }
                 catch (err) {
-                    console.log("Error while verifying message");
-                    reject("Message not valid - verification failed.");
+                    reject("Error while adding block.");
                 }
             }
             else {
@@ -146,7 +152,7 @@ class Blockchain {
     getBlockByHash(hash) {
         let self = this;
         return new Promise((resolve, reject) => {
-            let block = self.chain.filter(p => p.hash === hash)[0];
+            let block = self.chain.find(p => p.hash === hash);
             if (block) {
                 resolve(block);
             } else {
@@ -188,7 +194,7 @@ class Blockchain {
                         .then(function (data) {
                             console.log(data);
                             if (data.owner === address) {
-                                stars.push(block);
+                                stars.push(data);
                             }
                         })
                         .catch(function (err) {
@@ -213,13 +219,20 @@ class Blockchain {
             if (self.height > 0) {
                 let previousBlockHash = null;
                 self.chain.forEach(block => {
-                    if (!block.validate()) {
-                        errorLog.push("Block with height " + block.height + " is not valid");
-                    }
-                    if (previousBlockHash !== null && block.previousBlockHash !== previousBlockHash) {
-                        errorLog.push("Block with height " + block.height + " has a wrong previousBlockHash");
-                    }
-                    previousBlockHash = block.hash;
+                    block.validate()
+                        .then(function (blockIsValid) {
+                            if (!blockIsValid) {
+                                errorLog.push("Block with height " + block.height + " is not valid");
+                            }
+                            if (previousBlockHash !== null && block.previousBlockHash !== previousBlockHash) {
+                                errorLog.push("Block with height " + block.height + " has a wrong previousBlockHash");
+                            }
+                            previousBlockHash = block.hash;
+                        })
+                        .catch(function (err) {
+                            errorLog.push("Error while validating block with height" + block.height);
+                        });
+
                 })
             }
             resolve(errorLog);
