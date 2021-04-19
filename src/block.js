@@ -42,7 +42,7 @@ class Block {
             const actualHash = self.hash;    
             self.hash = null;                            
             // Recalculate the hash of the Block
-            const generatedHash = SHA256(JSON.stringify(self));
+            const generatedHash = SHA256(JSON.stringify(self)).toString();
             if(generatedHash) {
                 self.hash = generatedHash;
                 // Comparing if the hashes changed

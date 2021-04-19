@@ -215,25 +215,31 @@ class Blockchain {
     validateChain() {
         let self = this;
         let errorLog = [];
+        let promises = [];
         return new Promise(async (resolve, reject) => {
             if (self.height > 0) {
                 let previousBlockHash = null;
                 self.chain.forEach(block => {
-                    block.validate()
-                        .then(function (blockIsValid) {
+                    promises.push(block.validate());
+                    if (previousBlockHash !== null && block.previousBlockHash !== previousBlockHash) {
+                        errorLog.push("Block with height " + block.height + " has a wrong previousBlockHash");
+                    }
+                    previousBlockHash = block.hash;
+                });
+                let blockIndex = 0;
+                Promise.all(promises)
+                    .then(function (results) {
+                        results.forEach(blockIsValid => {
+                            console.log("Block with height " + blockIndex + " is valid: " + blockIsValid);
                             if (!blockIsValid) {
-                                errorLog.push("Block with height " + block.height + " is not valid");
+                                errorLog.push("Block with height " + blockIndex + " is not valid");
                             }
-                            if (previousBlockHash !== null && block.previousBlockHash !== previousBlockHash) {
-                                errorLog.push("Block with height " + block.height + " has a wrong previousBlockHash");
-                            }
-                            previousBlockHash = block.hash;
-                        })
-                        .catch(function (err) {
-                            errorLog.push("Error while validating block with height" + block.height);
+                            blockIndex++;
                         });
-
-                })
+                    })
+                    .catch(function (err) {
+                        errorLog.push(err);
+                    });
             }
             resolve(errorLog);
         });
